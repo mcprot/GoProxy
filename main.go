@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
 	log "github.com/sirupsen/logrus"
-	"math"
 	"net"
 )
 
@@ -31,48 +29,30 @@ func handleConnection(conn net.Conn) error {
 		return err
 	}
 
-	go clientToServer(conn, minecraft)
-	go serverToClient(conn, minecraft)
+	go proxy(conn, minecraft)
+	go proxy(minecraft, conn)
 	return nil
 }
 
-func serverToClient(client net.Conn, server net.Conn) {
+func proxy(from net.Conn, to net.Conn) {
 	b := make([]byte, 65535)
 	for {
-		n, err := server.Read(b)
+		n, err := from.Read(b)
 		if err != nil {
 			log.Error(err)
-			return
+			break
 		}
 
-		n, err = client.Write(b[:n])
+		n ,err = to.Write(b[:n])
 		if err != nil {
 			log.Error(err)
-			return
+			break
 		}
-
-
 	}
+	from.Close()
+	to.Close()
 }
 
-func clientToServer(client net.Conn, server net.Conn) {
-	b := make([]byte, 65535)
-	for {
-		n, err := client.Read(b)
-		if err != nil {
-			log.Error(err)
-			return
-		}
-
-		n, err = server.Write(b[:n])
-		if err != nil {
-			log.Error(err)
-			return
-		}
-
-
-	}
-}
 type Packet struct {
 	Length int64
 	PacketID int64
