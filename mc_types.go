@@ -1,6 +1,7 @@
 package main
+
 import (
-	"bytes"	
+	"bytes"
 )
 
 func readVarInt(r *bytes.Reader) (int, error) {
@@ -10,8 +11,8 @@ func readVarInt(r *bytes.Reader) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		v |= (int(b&0x7F) << uint(7*i))
-		if b & 0x80 == 0 {
+		v |= int(b&0x7F) << uint(7*i)
+		if b&0x80 == 0 {
 			break
 		}
 	}

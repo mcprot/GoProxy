@@ -1,16 +1,31 @@
 package main
 
 import (
-	"fmt"
+	"bytes"
+	"errors"
+	"flag"
 	log "github.com/sirupsen/logrus"
 	"net"
-	"bytes"
 )
 
-func main() {
+var config *ConfigJson
 
-	ln, err := net.Listen("tcp", ":25565")
-	if err != nil { log.Fatal(err) }
+func main() {
+	port := flag.String("port", ":25566", "address to listen on")
+	flag.Parse()
+
+	var err error
+	config, err = loadConfig("config.json")
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ln, err := net.Listen("tcp", *port)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -23,42 +38,15 @@ func main() {
 
 }
 
-func getDestination(conn net.Conn) (dest net.Conn, err error) {
-	b := make([]byte, 65535)
-	n, err := conn.Read(b)
-	r := bytes.NewReader(b)
-	packetLength, err := readVarInt(r)
-	packetId, err := r.ReadByte()
-	if packetId != 0x00 {
-		return
-	}
-
-	protocolVersion, err := readVarInt(r)
-	addr, err := readString(r)
-	if err != nil { return }
-	fmt.Println(packetLength, protocolVersion)
-	destAddr := getDestAddr(addr)
-	dest, err = net.Dial("tcp", destAddr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	dest.Write(b[:n])
-	return dest, err
-}
-
-func handleConnection(conn net.Conn) error {
-	fmt.Println(conn.RemoteAddr())
-
-	
+func handleConnection(conn net.Conn) {
 	minecraft, err := getDestination(conn)
 	if err != nil {
-		return err
+		log.Error(err)
+		return
 	}
 	go proxy(conn, minecraft)
-	go proxy2(minecraft, conn)
-	return nil
+	go proxy(minecraft, conn)
 }
-
 
 func proxy(from net.Conn, to net.Conn) {
 	b := make([]byte, 65535)
@@ -69,38 +57,40 @@ func proxy(from net.Conn, to net.Conn) {
 			break
 		}
 
-		n ,err = to.Write(b[:n])
+		n, err = to.Write(b[:n])
 		if err != nil {
 			log.Error(err)
 			break
 		}
 	}
-	from.Close()
-	to.Close()
+	_ = from.Close()
+	_ = to.Close()
 }
 
-func proxy2(from net.Conn, to net.Conn) {
+func getDestination(conn net.Conn) (dest net.Conn, err error) {
 	b := make([]byte, 65535)
-	for {
-		n, err := from.Read(b)
-		if err != nil {
-			log.Error(err)
-			break
-		}
+	n, err := conn.Read(b)
 
-		n ,err = to.Write(b[:n])
-		if err != nil {
-			log.Error(err)
-			break
-		}
+	r := bytes.NewReader(b)
+	_, err = readVarInt(r) // packet length
+	packetId, err := r.ReadByte()
+	if packetId != 0x00 {
+		err = errors.New("not a packet")
+		return
 	}
-	from.Close()
-	to.Close()
-}
 
-type Packet struct {
-	Length int64
-	PacketID int64
-	Data []byte
+	_, err = readVarInt(r) // protocol version
+	addr, err := readString(r)
+	if err != nil {
+		return
+	}
 
+	destAddr := config.getDestinationAddress(addr)
+	log.Infof("%v is connected with host %v proxying request to %v", conn.RemoteAddr(), addr, destAddr)
+	dest, err = net.Dial("tcp", destAddr)
+	if err != nil {
+		return
+	}
+	_, err = dest.Write(b[:n])
+	return dest, err
 }

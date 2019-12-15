@@ -1,10 +1,41 @@
 package main
-func getDestAddr(addr string) string {
-	if addr == "127.0.0.1" {
-		return "127.0.0.1:25566"
+
+import (
+	"encoding/json"
+	"io/ioutil"
+	"os"
+)
+
+type ConfigJson struct {
+	Routes map[string]string `json:"routes"`
+	Test   string            `json:"test"`
+}
+
+func loadConfig(filename string) (*ConfigJson, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
 	}
-	if addr == "localtest.foxorsomething.net" {
-		return "127.0.0.1:25567"
+
+	config := ConfigJson{}
+	data, err := ioutil.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(data, &config)
+	return &config, nil
+
+}
+
+func (c *ConfigJson) getDestinationAddress(addr string) string {
+	dest, ok := c.Routes[addr]
+	if ok {
+		return dest
+	}
+
+	defaultDest, ok := c.Routes["default"]
+	if ok {
+		return defaultDest
 	}
 	return ""
 }
