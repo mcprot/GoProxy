@@ -11,7 +11,7 @@ import (
 var config *ConfigJson
 
 func main() {
-	port := flag.String("port", ":25566", "address to listen on")
+	port := flag.String("port", ":25565", "address to listen on")
 	flag.Parse()
 
 	var err error
