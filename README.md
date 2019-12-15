@@ -1,2 +1,2 @@
 # mcproxy
-a simple proxy for minecraft 
+a simple proxy
