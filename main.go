@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"flag"
+	"github.com/plally/mcproxy/mcnet"
 	log "github.com/sirupsen/logrus"
 	"net"
 )
@@ -15,12 +15,17 @@ func main() {
 	flag.Parse()
 
 	var err error
+	if err != nil { log.Fatal(err) }
+
+	log.SetFormatter(&log.TextFormatter{})
+
 	config, err = loadConfig("config.json")
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	log.Info("Listening on "+*port)
 	ln, err := net.Listen("tcp", *port)
 	if err != nil {
 		log.Fatal(err)
@@ -33,22 +38,25 @@ func main() {
 			continue
 		}
 		go handleConnection(conn)
-
 	}
 
 }
 
 func handleConnection(conn net.Conn) {
-	minecraft, err := getDestination(conn)
+	client := mcnet.NewConn(conn)
+	minecraft, err := getDestination(client)
 	if err != nil {
+		msg := `{"text":"Sorry, couldn't connect you to the server. The server might be down or you used the wrong address."}`
+		client.WritePacket(0x00, mcnet.String(msg))
 		log.Error(err)
 		return
 	}
-	go proxy(conn, minecraft)
-	go proxy(minecraft, conn)
+	go proxy(client, minecraft)
+	go proxy(minecraft, client)
 }
 
-func proxy(from net.Conn, to net.Conn) {
+func proxy(from *mcnet.Conn, to *mcnet.Conn) {
+	// reads packets from oen mcnet.Conn writing them to the other
 	b := make([]byte, 65535)
 	for {
 		n, err := from.Read(b)
@@ -67,30 +75,33 @@ func proxy(from net.Conn, to net.Conn) {
 	_ = to.Close()
 }
 
-func getDestination(conn net.Conn) (dest net.Conn, err error) {
-	b := make([]byte, 65535)
-	n, err := conn.Read(b)
 
-	r := bytes.NewReader(b)
-	_, err = readVarInt(r) // packet length
-	packetId, err := r.ReadByte()
+func getDestination(conn *mcnet.Conn) (*mcnet.Conn, error) {
+	// TODO this function needs to be rewritten
+	// reads the initial handshake package to determine where to connect the client
+	packetLength := conn.ReadVarInt()
+	packetId, err := conn.ReadByte()
 	if packetId != 0x00 {
-		err = errors.New("not a packet")
-		return
+		err = errors.New("not a handshake packet")
+		return &mcnet.Conn{}, err
 	}
 
-	_, err = readVarInt(r) // protocol version
-	addr, err := readString(r)
+	protocolVersion := conn.ReadVarInt() // protocol version
+	addr := conn.ReadString()
 	if err != nil {
-		return
+		return &mcnet.Conn{}, err
 	}
 
 	destAddr := config.getDestinationAddress(addr)
-	log.Infof("%v is connected with host %v proxying request to %v", conn.RemoteAddr(), addr, destAddr)
-	dest, err = net.Dial("tcp", destAddr)
+	log.Infof("%v is connected with host %v proxying request to %v", conn.Conn.RemoteAddr(), addr, destAddr)
+	dest, err := net.Dial("tcp", destAddr)
 	if err != nil {
-		return
+		return &mcnet.Conn{}, err
 	}
-	_, err = dest.Write(b[:n])
-	return dest, err
+	server := mcnet.NewConn(dest)
+	server.WriteVarInt(packetLength)
+	server.Write([]byte{packetId})
+	server.WriteVarInt(protocolVersion)
+	server.WriteString(addr)
+	return server, err
 }
