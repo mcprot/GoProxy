@@ -3,29 +3,31 @@ package main
 import (
 	"errors"
 	"flag"
-	"github.com/plally/mcproxy/mcnet"
+	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
+	"mcprotproxy/mcnet"
 	"net"
+	"os"
 )
 
-var config *ConfigJson
-
 func main() {
-	port := flag.String("port", ":25565", "address to listen on")
-	flag.Parse()
-
 	var err error
-	if err != nil { log.Fatal(err) }
-
-	log.SetFormatter(&log.TextFormatter{})
-
-	config, err = loadConfig("config.json")
-
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Info("Listening on "+*port)
+	log.SetFormatter(&log.TextFormatter{})
+
+	godotenv.Load()
+
+	var proxies Proxies = map[string]Server{}
+
+	Update(&proxies)
+
+	port := flag.String("port", ":"+os.Getenv("PORT"), "address to listen on")
+	flag.Parse()
+
+	log.Info("Listening on " + *port)
 	ln, err := net.Listen("tcp", *port)
 	if err != nil {
 		log.Fatal(err)
@@ -37,14 +39,13 @@ func main() {
 			log.Error(err)
 			continue
 		}
-		go handleConnection(conn)
+		go handleConnection(conn, &proxies)
 	}
-
 }
 
-func handleConnection(conn net.Conn) {
+func handleConnection(conn net.Conn, proxies *Proxies) {
 	client := mcnet.NewConn(conn)
-	minecraft, err := getDestination(client)
+	minecraft, err := getDestination(client, proxies)
 	if err != nil {
 		msg := `{"text":"Sorry, couldn't connect you to the server. The server might be down or you used the wrong address."}`
 		client.WritePacket(0x00, mcnet.String(msg))
@@ -75,8 +76,7 @@ func proxy(from *mcnet.Conn, to *mcnet.Conn) {
 	_ = to.Close()
 }
 
-
-func getDestination(conn *mcnet.Conn) (*mcnet.Conn, error) {
+func getDestination(conn *mcnet.Conn, proxies *Proxies) (*mcnet.Conn, error) {
 	// TODO this function needs to be rewritten
 	// reads the initial handshake package to determine where to connect the client
 	packetLength := conn.ReadVarInt()
@@ -92,9 +92,10 @@ func getDestination(conn *mcnet.Conn) (*mcnet.Conn, error) {
 		return &mcnet.Conn{}, err
 	}
 
-	destAddr := config.getDestinationAddress(addr)
-	log.Infof("%v is connected with host %v proxying request to %v", conn.Conn.RemoteAddr(), addr, destAddr)
-	dest, err := net.Dial("tcp", destAddr)
+	backend := getProxyBackend(addr, proxies)
+
+	log.Infof("%v is connected with host %v proxying request to %v", conn.Conn.RemoteAddr(), addr, backend.IpAddress+":"+backend.Port)
+	dest, err := net.Dial("tcp", backend.IpAddress+":"+backend.Port)
 	if err != nil {
 		return &mcnet.Conn{}, err
 	}
@@ -104,4 +105,17 @@ func getDestination(conn *mcnet.Conn) (*mcnet.Conn, error) {
 	server.WriteVarInt(protocolVersion)
 	server.WriteString(addr)
 	return server, err
+}
+
+func getProxyBackend(hostname string, proxies *Proxies) Target {
+	var target Target
+
+	for _, t := range (*proxies)[hostname].Targets {
+		if t.Online {
+			target = t
+			break
+		}
+	}
+
+	return target
 }
