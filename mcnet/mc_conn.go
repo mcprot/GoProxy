@@ -22,7 +22,7 @@ type Conn struct {
 
 func NewConn(conn net.Conn) *Conn {
 	return &Conn{
-		Conn: conn,
+		Conn:   conn,
 		Reader: bufio.NewReader(conn),
 		Writer: conn,
 	}
@@ -36,6 +36,10 @@ func (c *Conn) WriteVarInt(n int) (int, error) {
 	return writeVarInt(n, c)
 }
 
+func (c *Conn) WriteVarShort(n uint16) (int, error) {
+	return writeVarShort(n, c)
+}
+
 func (c *Conn) WriteString(s string) (int, error) {
 	return writeString(s, c)
 }
@@ -44,7 +48,7 @@ func (c *Conn) ReadString() string {
 }
 
 func (c *Conn) WritePacket(packetID byte, data []byte) (int, error) {
-	c.WriteVarInt(len(data)+1)
+	c.WriteVarInt(len(data) + 1)
 	c.Write([]byte{packetID})
 	return c.Write(data)
 }
