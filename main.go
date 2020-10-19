@@ -115,10 +115,12 @@ func getDestination(conn *mcnet.Conn, proxies *Proxies) (*mcnet.Conn, ProxyError
 		return &mcnet.Conn{}, FindError, nextState
 	}
 
-	backend := getProxyBackend(hostname, proxies)
+	backendFind := getProxyBackend(hostname, proxies)
 
-	log.Infof("%v is connected with host %v proxying request to %v", conn.Conn.RemoteAddr(), hostname, backend.IpAddress+":"+backend.Port)
-	dest, err := net.Dial("tcp", backend.IpAddress+":"+backend.Port)
+	host := backendFind.IPAddress + ":" + backendFind.Port
+
+	log.Infof("%v is connected with host %v proxying request to %v", conn.Conn.RemoteAddr(), hostname, host)
+	dest, err := net.Dial("tcp", host)
 	if err != nil {
 		return &mcnet.Conn{}, OfflineError, nextState
 	}
