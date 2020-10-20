@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
-	"mcprotproxy/mcnet"
 	"net/http"
 	"os"
 	"strings"
@@ -71,16 +70,16 @@ type Server struct {
 	Plan     string
 }
 
-func Update(proxies *Proxies) {
+func Update(proxies *Proxies, signer Signer) {
 	var proxiesTemp proxiesApi
 	getProxies(&proxiesTemp)
 
 	for _, p := range proxiesTemp.Data {
-		(*proxies)[p.Hostname] = Server{Hostname: p.Hostname, Targets: createTargets(p.Targets)}
+		(*proxies)[p.Hostname] = Server{Hostname: p.Hostname, Targets: createTargets(p.Targets, signer)}
 	}
 }
 
-func createTargets(t []string) []Target {
+func createTargets(t []string, signer Signer) []Target {
 	var targets []Target
 	for _, target := range t {
 		tStr := strings.Split(target, ":")
@@ -96,7 +95,7 @@ func createTargets(t []string) []Target {
 		hostStr := tStr[0] + ":" + tPort
 
 		// TODO make it figure out if it is online lolz
-		if !mcnet.QueryStatus(hostStr, 150*time.Millisecond) {
+		if !QueryStatus(hostStr, 150*time.Millisecond, signer) {
 			online = false
 		}
 

@@ -1,17 +1,52 @@
 package main
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha512"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
+	"mcprotproxy/mcnet"
+	"strconv"
+	"strings"
+	"time"
 )
+
+func MakeHostname(signer Signer, hostName string, sourceIp string, sourcePort string) (string, int) {
+	originalHostnameBuff := &bytes.Buffer{}
+	originalHostnameBuff.Write(mcnet.String(hostName))
+
+	forgeSplit := strings.SplitN(hostName, "\000", 2)
+	modifiedHostname := forgeSplit[0] + "///" + sourceIp + ":" + sourcePort + "///" + strconv.FormatInt(time.Now().Unix()/1000, 10)
+
+	signed, err := signer.Sign([]byte(modifiedHostname))
+	if err != nil {
+		fmt.Errorf("could not sign request: %v", err)
+	}
+	sig := base64.StdEncoding.EncodeToString(signed)
+	//fmt.Printf("Signature: %v\n", sig)
+
+	forgeBuilt := ""
+	if len(forgeSplit) > 1 {
+		forgeBuilt = "\000" + forgeSplit[1]
+	}
+
+	encodedHost := modifiedHostname + "///" + sig + forgeBuilt
+
+	newHostname := &bytes.Buffer{}
+	newHostname.Write(mcnet.String(encodedHost))
+
+	//log.Errorf("makehost - packet length %v packet dif %v combined %v", len(newHostname.Bytes()), len(originalHostnameBuff.Bytes()), len(newHostname.Bytes()) - len(originalHostnameBuff.Bytes()))
+
+	return encodedHost, len(newHostname.Bytes()) - len(originalHostnameBuff.Bytes())
+}
 
 func LoadSigner(path string) (Signer, error) {
 	var err error
@@ -89,13 +124,6 @@ type Signer interface {
 	Sign(data []byte) ([]byte, error)
 }
 
-// A Signer is can create signatures that verify against a public key.
-type Unsigner interface {
-	// Sign returns raw signature for the given data. This method
-	// will apply the hash specified for the keytype to the data.
-	Unsign(data []byte, sig []byte) error
-}
-
 func newSignerFromKey(k interface{}) (Signer, error) {
 	var sshKey Signer
 	switch t := k.(type) {
@@ -113,8 +141,8 @@ type rsaPrivateKey struct {
 
 // Sign signs data with rsa-sha256
 func (r *rsaPrivateKey) Sign(data []byte) ([]byte, error) {
-	h := sha512.New()
+	h := sha256.New()
 	h.Write(data)
 	d := h.Sum(nil)
-	return rsa.SignPKCS1v15(rand.Reader, r.PrivateKey, crypto.SHA512, d)
+	return rsa.SignPKCS1v15(rand.Reader, r.PrivateKey, crypto.SHA256, d)
 }

@@ -1,4 +1,4 @@
-package mcnet
+package main
 
 import (
 	"bytes"
@@ -6,11 +6,12 @@ import (
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"io"
+	"mcprotproxy/mcnet"
 	"net"
 	"time"
 )
 
-func QueryStatus(hostPort string, timeout time.Duration) bool {
+func QueryStatus(hostPort string, timeout time.Duration, signer Signer) bool {
 	dialer := net.Dialer{Timeout: timeout}
 	conn, err := dialer.Dial("tcp", hostPort)
 	if err != nil {
@@ -18,11 +19,14 @@ func QueryStatus(hostPort string, timeout time.Duration) bool {
 		return false
 	}
 
+	hostname, _ := MakeHostname(signer,
+		"mcprot.com", "127.0.0.1", "25565")
+
 	buff := &bytes.Buffer{}
-	buff.Write(VarInt(47))
-	buff.Write(String("mcprot.com")) //TODO make use encrypted hostname to bypass plugin
-	buff.Write(VarShort(25565))
-	buff.Write(VarInt(1))
+	buff.Write(mcnet.VarInt(47))
+	buff.Write(mcnet.String(hostname)) //TODO make use encrypted hostname to bypass plugin
+	buff.Write(mcnet.VarShort(25565))
+	buff.Write(mcnet.VarInt(1))
 
 	//send basic info
 	err = writePacket(0x00, buff.Bytes(), conn)

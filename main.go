@@ -10,6 +10,8 @@ import (
 	"mcprotproxy/mcnet"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 )
 
 func main() {
@@ -22,14 +24,15 @@ func main() {
 
 	godotenv.Load()
 
-	_, err = LoadSigner("private.pem")
+	var signer Signer
+	signer, err = LoadSigner("private.pem")
 	if err != nil {
 		log.Error(err)
 	}
 
 	var proxies Proxies = map[string]Server{}
 	autoUpdate := func() {
-		go Update(&proxies)
+		go Update(&proxies, signer)
 		log.Info("Updating proxy information")
 	}
 
@@ -50,13 +53,13 @@ func main() {
 			log.Error(err)
 			continue
 		}
-		go handleConnection(conn, &proxies)
+		go handleConnection(conn, &proxies, signer)
 	}
 }
 
-func handleConnection(conn net.Conn, proxies *Proxies) {
+func handleConnection(conn net.Conn, proxies *Proxies, signer Signer) {
 	client := mcnet.NewConn(conn)
-	minecraft, proxyError, nextState := getDestination(client, proxies)
+	minecraft, proxyError, nextState := getDestination(client, proxies, signer)
 	if proxyError != NoError && nextState != OtherState {
 		WriteError(client, proxyError, nextState)
 		return
@@ -112,7 +115,7 @@ const (
 	LoginState  State = 2
 )
 
-func getDestination(conn *mcnet.Conn, proxies *Proxies) (*mcnet.Conn, ProxyError, State) {
+func getDestination(conn *mcnet.Conn, proxies *Proxies, signer Signer) (*mcnet.Conn, ProxyError, State) {
 	// TODO this function needs to be rewritten
 	// reads the initial handshake package to determine where to connect the client
 	packetLength := conn.ReadVarInt()
@@ -153,12 +156,19 @@ func getDestination(conn *mcnet.Conn, proxies *Proxies) (*mcnet.Conn, ProxyError
 		return &mcnet.Conn{}, OfflineError, nextState
 	}
 
+	remoteAddr := strings.Split(conn.Conn.RemoteAddr().String(), ":")
+	port, _ := strconv.Atoi(remoteAddr[1])
+
+	newHostname, packetDif := MakeHostname(signer, hostname, remoteAddr[0], remoteAddr[1])
+
+	log.Info(newHostname)
+
 	server := mcnet.NewConn(dest)
-	server.WriteVarInt(packetLength)
+	server.WriteVarInt(packetLength + packetDif)
 	server.Write([]byte{packetId})
 	server.WriteVarInt(protocolVersion)
-	server.WriteString(hostname)
-	server.WriteVarShort(16661)
+	server.WriteString(newHostname)
+	server.WriteVarShort(uint16(port))
 	server.WriteVarInt(state)
 	return server, NoError, nextState
 }
