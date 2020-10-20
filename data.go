@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
+	"mcprotproxy/mcnet"
 	"net/http"
 	"os"
 	"strings"
@@ -90,13 +91,20 @@ func createTargets(t []string) []Target {
 			tPort = tStr[1]
 		}
 
+		online := true
+
+		hostStr := tStr[0] + ":" + tPort
+
 		// TODO make it figure out if it is online lolz
+		if !mcnet.QueryStatus(hostStr, 150*time.Millisecond) {
+			online = false
+		}
 
 		targets = append(targets, Target{
 			IPAddress:   tStr[0],
 			Port:        tPort,
 			Connections: 0,
-			Online:      true,
+			Online:      online,
 		})
 	}
 

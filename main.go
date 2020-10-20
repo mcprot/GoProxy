@@ -3,8 +3,10 @@ package main
 import (
 	"errors"
 	"flag"
+	"github.com/carlescere/scheduler"
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
+	"io"
 	"mcprotproxy/mcnet"
 	"net"
 	"os"
@@ -20,9 +22,18 @@ func main() {
 
 	godotenv.Load()
 
-	var proxies Proxies = map[string]Server{}
+	_, err = LoadSigner("private.pem")
+	if err != nil {
+		log.Error(err)
+	}
 
-	Update(&proxies)
+	var proxies Proxies = map[string]Server{}
+	autoUpdate := func() {
+		go Update(&proxies)
+		log.Info("Updating proxy information")
+	}
+
+	scheduler.Every(30).Seconds().Run(autoUpdate)
 
 	port := flag.String("port", ":"+os.Getenv("PORT"), "address to listen on")
 	flag.Parse()
@@ -50,24 +61,37 @@ func handleConnection(conn net.Conn, proxies *Proxies) {
 		WriteError(client, proxyError, nextState)
 		return
 	}
+
 	go proxy(client, minecraft)
 	go proxy(minecraft, client)
 }
 
 func proxy(from *mcnet.Conn, to *mcnet.Conn) {
 	// reads packets from oen mcnet.Conn writing them to the other
-	b := make([]byte, 65535)
+
+	b := make([]byte, 8192)
+
 	for {
 		n, err := from.Read(b)
-		if err != nil {
-			log.Error(err)
+
+		if n == 0 {
 			break
 		}
 
-		n, err = to.Write(b[:n])
 		if err != nil {
-			log.Error(err)
-			break
+			if err != io.EOF {
+				log.Error(err)
+				break
+			}
+		}
+
+		n, err = to.Write(b[:n])
+
+		if err != nil {
+			if err != io.EOF {
+				log.Error(err)
+				break
+			}
 		}
 	}
 	_ = from.Close()
@@ -117,6 +141,10 @@ func getDestination(conn *mcnet.Conn, proxies *Proxies) (*mcnet.Conn, ProxyError
 
 	backendFind := getProxyBackend(hostname, proxies)
 
+	if !backendFind.Online {
+		return &mcnet.Conn{}, OfflineError, nextState
+	}
+
 	host := backendFind.IPAddress + ":" + backendFind.Port
 
 	log.Infof("%v is connected with host %v proxying request to %v", conn.Conn.RemoteAddr(), hostname, host)
@@ -141,10 +169,8 @@ func getProxyBackend(hostname string, proxies *Proxies) Target {
 	//TODO backend balancing
 
 	for _, t := range (*proxies)[hostname].Targets {
-		if t.Online {
-			target = t
-			break
-		}
+		target = t
+		break
 	}
 
 	return target

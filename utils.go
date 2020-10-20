@@ -20,9 +20,9 @@ func WriteError(conn *mcnet.Conn, msg ProxyError, state State) {
 	if state == StatusState {
 		conn.WritePacket(0x00, mcnet.String(makeMotdMsg(msg)))
 		conn.WritePacket(0x01, mcnet.VarShort(1))
-		conn.Close()
 	} else {
 		conn.WritePacket(0x00, mcnet.String(makeKickMsg(msg)))
-		conn.Close()
 	}
+
+	conn.Close()
 }
