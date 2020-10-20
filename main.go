@@ -161,8 +161,6 @@ func getDestination(conn *mcnet.Conn, proxies *Proxies, signer Signer) (*mcnet.C
 
 	newHostname, packetDif := MakeHostname(signer, hostname, remoteAddr[0], remoteAddr[1])
 
-	log.Info(newHostname)
-
 	server := mcnet.NewConn(dest)
 	server.WriteVarInt(packetLength + packetDif)
 	server.Write([]byte{packetId})

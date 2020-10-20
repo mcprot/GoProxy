@@ -5,7 +5,7 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
@@ -141,8 +141,8 @@ type rsaPrivateKey struct {
 
 // Sign signs data with rsa-sha256
 func (r *rsaPrivateKey) Sign(data []byte) ([]byte, error) {
-	h := sha256.New()
+	h := sha512.New()
 	h.Write(data)
 	d := h.Sum(nil)
-	return rsa.SignPKCS1v15(rand.Reader, r.PrivateKey, crypto.SHA256, d)
+	return rsa.SignPKCS1v15(rand.Reader, r.PrivateKey, crypto.SHA512, d)
 }
