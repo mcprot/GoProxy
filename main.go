@@ -72,7 +72,7 @@ func handleConnection(conn net.Conn, proxies *Proxies, signer Signer) {
 func proxy(from *mcnet.Conn, to *mcnet.Conn) {
 	// reads packets from oen mcnet.Conn writing them to the other
 
-	b := make([]byte, 8192)
+	b := make([]byte, 65535)
 
 	for {
 		n, err := from.Read(b)
@@ -138,11 +138,17 @@ func getDestination(conn *mcnet.Conn, proxies *Proxies, signer Signer) (*mcnet.C
 		nextState = LoginState
 	}
 
-	if _, ok := (*proxies)[hostname]; !ok {
+	forgeRemoval := hostname
+
+	if strings.Contains(hostname, "FML") {
+		forgeRemoval = strings.SplitN(hostname, "\000", 2)[0]
+	}
+
+	if _, ok := (*proxies)[forgeRemoval]; !ok {
 		return &mcnet.Conn{}, FindError, nextState
 	}
 
-	backendFind := getProxyBackend(hostname, proxies)
+	backendFind := getProxyBackend(forgeRemoval, proxies)
 
 	if !backendFind.Online {
 		return &mcnet.Conn{}, OfflineError, nextState
