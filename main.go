@@ -10,8 +10,10 @@ import (
 	"mcprotproxy/mcnet"
 	"net"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 func main() {
@@ -23,6 +25,16 @@ func main() {
 	log.SetFormatter(&log.TextFormatter{})
 
 	godotenv.Load()
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGTERM)
+	signal.Notify(signals, syscall.SIGKILL)
+	go func() {
+		s := <-signals
+		log.Fatal("Received Signal: %s", s)
+		shutdown()
+		os.Exit(1)
+	}()
 
 	var signer Signer
 	signer, err = LoadSigner("private.pem")
@@ -55,6 +67,10 @@ func main() {
 		}
 		go handleConnection(conn, &proxies, signer)
 	}
+}
+
+func shutdown() {
+	log.Fatal("Shutting down proxy...")
 }
 
 func handleConnection(conn net.Conn, proxies *Proxies, signer Signer) {
