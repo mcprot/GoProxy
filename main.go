@@ -154,7 +154,7 @@ func getDestination(conn *mcnet.Conn, proxies *Proxies, signer Signer) (*mcnet.C
 		nextState = LoginState
 	}
 
-	forgeRemoval := hostname
+	forgeRemoval := strings.ToLower(hostname)
 
 	if strings.Contains(hostname, "FML") {
 		forgeRemoval = strings.SplitN(hostname, "\000", 2)[0]

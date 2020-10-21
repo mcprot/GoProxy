@@ -75,7 +75,7 @@ func Update(proxies *Proxies, signer Signer) {
 	getProxies(&proxiesTemp)
 
 	for _, p := range proxiesTemp.Data {
-		(*proxies)[p.Hostname] = Server{Hostname: p.Hostname, Targets: createTargets(p.Targets, signer)}
+		(*proxies)[strings.ToLower(p.Hostname)] = Server{Hostname: p.Hostname, Targets: createTargets(p.Targets, signer)}
 	}
 }
 

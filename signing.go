@@ -31,7 +31,6 @@ func MakeHostname(signer Signer, hostName string, sourceIp string, sourcePort st
 		fmt.Errorf("could not sign request: %v", err)
 	}
 	sig := base64.StdEncoding.EncodeToString(signed)
-	//fmt.Printf("Signature: %v\n", sig)
 
 	forgeBuilt := ""
 	if len(forgeSplit) > 1 {
@@ -42,8 +41,6 @@ func MakeHostname(signer Signer, hostName string, sourceIp string, sourcePort st
 
 	newHostname := &bytes.Buffer{}
 	newHostname.Write(mcnet.String(encodedHost))
-
-	//log.Errorf("makehost - packet length %v packet dif %v combined %v", len(newHostname.Bytes()), len(originalHostnameBuff.Bytes()), len(newHostname.Bytes()) - len(originalHostnameBuff.Bytes()))
 
 	return encodedHost, len(newHostname.Bytes()) - len(originalHostnameBuff.Bytes())
 }
@@ -58,34 +55,6 @@ func LoadSigner(path string) (Signer, error) {
 	log.Info("Loaded private key")
 	return signer, nil
 }
-
-/*func main() {
-	signer, err := loadPrivateKey("private.pem")
-	if err != nil {
-		fmt.Errorf("signer is damaged: %v", err)
-	}
-
-	toSign := "date: Thu, 05 Jan 2012 21:31:40 GMT"
-
-	signed, err := signer.Sign([]byte(toSign))
-	if err != nil {
-		fmt.Errorf("could not sign request: %v", err)
-	}
-	sig := base64.StdEncoding.EncodeToString(signed)
-	fmt.Printf("Signature: %v\n", sig)
-
-	parser, perr := loadPublicKey("public.pem")
-	if perr != nil {
-		fmt.Errorf("could not sign request: %v", err)
-	}
-
-	err = parser.Unsign([]byte(toSign), signed)
-	if err != nil {
-		fmt.Errorf("could not sign request: %v", err)
-	}
-
-	fmt.Printf("Unsign error: %v\n", err)
-}*/
 
 // loadPrivateKey loads an parses a PEM encoded private key file.
 func loadPrivateKey(path string) (Signer, error) {
