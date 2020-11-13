@@ -44,7 +44,7 @@ func QueryStatus(hostPort string, timeout time.Duration, signer Signer) bool {
 		return false
 	}
 
-	packetId, payload, err := readPacket(conn)
+	packetId, payload, err := ReadPacket(conn)
 
 	if err != nil {
 		log.Errorf("Status query error reading status packet: %s, host: %v", err, hostPort)
@@ -107,7 +107,7 @@ func writePacket(id int, payload []byte, writer io.Writer) error {
 	return err
 }
 
-func readPacket(reader io.Reader) (id int, payload []byte, err error) {
+func ReadPacket(reader io.Reader) (id int, payload []byte, err error) {
 	l, err := readVarint(reader) // dlugosc zawiera tez id pakietu
 	if err != nil {
 		return
