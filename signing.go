@@ -13,7 +13,6 @@ import (
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
-	"mcprotproxy/mcnet"
 	"strconv"
 	"strings"
 	"time"
@@ -21,7 +20,7 @@ import (
 
 func MakeHostname(signer Signer, hostName string, sourceIp string, sourcePort string) (string, int) {
 	originalHostnameBuff := &bytes.Buffer{}
-	originalHostnameBuff.Write(mcnet.String(hostName))
+	originalHostnameBuff.Write(String(hostName))
 
 	forgeSplit := strings.SplitN(hostName, "\000", 2)
 	modifiedHostname := forgeSplit[0] + "///" + sourceIp + ":" + sourcePort + "///" + strconv.FormatInt(time.Now().Unix()/1000, 10)
@@ -40,7 +39,7 @@ func MakeHostname(signer Signer, hostName string, sourceIp string, sourcePort st
 	encodedHost := modifiedHostname + "///" + sig + forgeBuilt
 
 	newHostname := &bytes.Buffer{}
-	newHostname.Write(mcnet.String(encodedHost))
+	newHostname.Write(String(encodedHost))
 
 	return encodedHost, len(newHostname.Bytes()) - len(originalHostnameBuff.Bytes())
 }

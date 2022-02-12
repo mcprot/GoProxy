@@ -7,7 +7,6 @@ import (
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
 	"io"
-	"mcprotproxy/mcnet"
 	"net"
 	"os"
 	"os/signal"
@@ -74,7 +73,7 @@ func shutdown() {
 }
 
 func handleConnection(conn net.Conn, proxies *Proxies, signer Signer) {
-	client := mcnet.NewConn(conn)
+	client := NewConn(conn)
 	minecraft, proxyError, nextState := getDestination(client, proxies, signer)
 	if proxyError != NoError && nextState != OtherState {
 		WriteError(client, proxyError, nextState)
@@ -85,7 +84,7 @@ func handleConnection(conn net.Conn, proxies *Proxies, signer Signer) {
 	go proxy(minecraft, client)
 }
 
-func proxy(from *mcnet.Conn, to *mcnet.Conn) {
+func proxy(from *Conn, to *Conn) {
 	// reads packets from oen mcnet.Conn writing them to the other
 
 	b := make([]byte, 65535)
@@ -131,14 +130,14 @@ const (
 	LoginState  State = 2
 )
 
-func getDestination(conn *mcnet.Conn, proxies *Proxies, signer Signer) (*mcnet.Conn, ProxyError, State) {
+func getDestination(conn *Conn, proxies *Proxies, signer Signer) (*Conn, ProxyError, State) {
 	// TODO this function needs to be rewritten
 	// reads the initial handshake package to determine where to connect the client
 	packetLength := conn.ReadVarInt()
 	packetId, err := conn.ReadByte()
 	if packetId != 0x00 {
 		err = errors.New("not a handshake packet")
-		return &mcnet.Conn{}, GenericError, OtherState
+		return &Conn{}, GenericError, OtherState
 	}
 
 	protocolVersion := conn.ReadVarInt() // protocol version
@@ -161,13 +160,13 @@ func getDestination(conn *mcnet.Conn, proxies *Proxies, signer Signer) (*mcnet.C
 	}
 
 	if _, ok := (*proxies)[forgeRemoval]; !ok {
-		return &mcnet.Conn{}, FindError, nextState
+		return &Conn{}, FindError, nextState
 	}
 
 	backendFind := getProxyBackend(forgeRemoval, proxies)
 
 	if !backendFind.Online {
-		return &mcnet.Conn{}, OfflineError, nextState
+		return &Conn{}, OfflineError, nextState
 	}
 
 	host := backendFind.IPAddress + ":" + backendFind.Port
@@ -175,7 +174,7 @@ func getDestination(conn *mcnet.Conn, proxies *Proxies, signer Signer) (*mcnet.C
 	log.Infof("%v is connected with host %v proxying request to %v", conn.Conn.RemoteAddr(), hostname, host)
 	dest, err := net.Dial("tcp", host)
 	if err != nil {
-		return &mcnet.Conn{}, OfflineError, nextState
+		return &Conn{}, OfflineError, nextState
 	}
 
 	remoteAddr := strings.Split(conn.Conn.RemoteAddr().String(), ":")
@@ -183,7 +182,7 @@ func getDestination(conn *mcnet.Conn, proxies *Proxies, signer Signer) (*mcnet.C
 
 	newHostname, packetDif := MakeHostname(signer, hostname, remoteAddr[0], remoteAddr[1])
 
-	server := mcnet.NewConn(dest)
+	server := NewConn(dest)
 	server.WriteVarInt(packetLength + packetDif)
 	server.Write([]byte{packetId})
 	server.WriteVarInt(protocolVersion)

@@ -1,4 +1,4 @@
-package mcnet
+package main
 
 import (
 	"encoding/binary"
